@@ -62,9 +62,47 @@ fn with_users(users: Users) -> impl Filter<Extract = (Users,), Error = Infallibl
     warp::any().map(move || users.clone())
 }
 
-pub async fn login_handler(users: Users, body: LoginRequest) -> WebResult<impl Reply>{
+pub async fn login_handler(users: Users, body: LoginRequest) -> WebResult<impl Reply> {
     match users
         .iter()
-        .find(|_uid, user)| user.email == body.email && user.pw == body.pw)
-        .
+        .find(|(_uid, user)| user.email == body.email && user.pw == body.pw)
+    {
+        Some((uid, user)) => {
+            let token = auth::create_jwt(&uid, &Role::from_str(&user.role))
+                .map_err(|e| reject::custom(e))?;
+            Ok(reply::json(&LoginResponse { token }))
+        }
+        None => Err(reject::custom(WrongCredentialsError)),
+    }
+}
+
+pub async fn user_handler(uid: String) -> WebResult<impl Reply> {
+    Ok(format!("Hello User {}!", uid))
+}
+
+pub async fn admin_handler(uid: String) -> WebResult<impl Reply> {
+    Ok(format!("Hello Admin {}!", uid))
+}
+
+fn init_users() -> HashMap<String, User> {
+    let mut map = HashMap::new();
+    map.insert(
+        String::from("1"),
+        User {
+            uid: String::from("1"),
+            email: String::from("user@user1and.com"),
+            pw: String::from("1234"),
+            role: String::from("User"),
+        },
+    );
+    map.insert(
+        String::from("2"),
+        User {
+            uid: String::from("2"),
+            email: String::from("admin@adminaty.com"),
+            pw: String::from("4321"),
+            role: String::from("Admin"),
+        },
+    );
+    map
 }
