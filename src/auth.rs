@@ -3,7 +3,7 @@ use chrono::prelude::*;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Role {
     User,
     Admin,
@@ -11,7 +11,7 @@ pub enum Role {
 
 use std::fmt;
 use warp::{
-    filters::{header::headers_cloned, path::Exact},
+    filters::header::headers_cloned,
     http::header::{HeaderMap, HeaderValue, AUTHORIZATION},
     reject, Filter, Rejection,
 };
@@ -58,7 +58,7 @@ pub fn create_jwt(uid: &str, role: &Role) -> Result<String> {
 
     let claims = Claims {
         sub: uid.to_owned(),
-        role: role.to_string(),
+        role: role.clone(),
         exp: expiration as usize,
     };
 
@@ -77,7 +77,7 @@ async fn authorize((role, headers): (Role, HeaderMap<HeaderValue>)) -> WebResult
             )
             .map_err(|_| reject::custom(Error::JWTTokenError))?;
 
-            if role == Role::Admin && Role::from_str(&decoded.claims.role) != Role::Admin {
+            if role == Role::Admin && decoded.claims.role != Role::Admin {
                 return Err(reject::custom(Error::NoPermissionError));
             }
             Ok(decoded.claims.sub)
@@ -89,7 +89,7 @@ async fn authorize((role, headers): (Role, HeaderMap<HeaderValue>)) -> WebResult
 fn jwt_from_header(headers: &HeaderMap<HeaderValue>) -> Result<String> {
     let header = match headers.get(AUTHORIZATION) {
         Some(v) => v,
-        None => return Err(Err),
+        None => return Err(Error::NoAuthHeaderError),
     };
     let auth_header = match std::str::from_utf8(header.as_bytes()) {
         Ok(v) => v,
